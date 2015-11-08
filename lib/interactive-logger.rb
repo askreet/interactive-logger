@@ -1,62 +1,99 @@
 # coding: utf-8
 require 'colorize'
 require 'ruby-duration'
+require 'thread'
 
 # A logger that shows activity for each step without spamming to stdout.
 class InteractiveLogger
-  class Step
-    PROGRESS_SYMBOLS = %w(- \\ | /)
-    FAILURE_SYMBOL = '✗'.red
-    SUCCESS_SYMBOL = '✓'.green
-    LB = '['.light_black
-    RB = ']'.light_black
+  require_relative 'interactive_logger/step'
+  require_relative 'interactive_logger/threaded_step_interface'
 
-    def initialize(str, show_time: true)
-      @orig_str = str
-      @start = Time.now
-      @show_time = show_time
-      @pos = 0
-      print_msg(in_progress_prefix << str)
-    end
-
-    def continue(str = nil)
-      @pos += 1
-      print_msg("\r" << in_progress_prefix << (str || @orig_str))
-    end
-
-    def failure(str = nil)
-      print_msg("\r" << prefix(FAILURE_SYMBOL) << (str || @orig_str))
-    end
-
-    def success(str = nil)
-      print_msg("\r" << prefix(SUCCESS_SYMBOL) << (str || @orig_str))
-    end
-
-    private
-
-    def in_progress_prefix
-      prefix(PROGRESS_SYMBOLS[@pos % PROGRESS_SYMBOLS.size].yellow)
-    end
-
-    def prefix(str)
-      show_time = ''
-      if @show_time
-        show_time = Duration.new(Time.now.to_i - @start.to_i)
-                            .format(" #{LB} %tmm %ss #{RB}")
-      end
-      "#{LB} #{str} #{RB}#{show_time} "
-    end
-
-    def print_msg(str)
-      @max_str = [str.uncolorize.size, @max_str || 0].max
-      str << ' ' * (@max_str - str.uncolorize.size)
-      print str
-    end
+  def initialize(debug: false)
+    @debug = debug
+    @current_step = nil
   end
+
+  def debug?; @debug == true end
 
   # Start a step.
   def start(str)
-    yield Step.new(str)
+    @current_step = Step.new(str)
+    yield @current_step
+    print "\n"
+  rescue => e
+    @current_step.failure "Error while performing step: #{str}\n  #{e.class}: #{e.message}"
+    print "\n"
+    raise
+  ensure
+    @current_step = nil
+  end
+
+  # Use a threaded interface, to keep the UI updated even on a long-running
+  # process.
+  def start_threaded(str)
+    @current_step = Step.new(str)
+    queue = Queue.new
+
+    Thread.abort_on_exception = true
+    child = Thread.new do
+      yield ThreadedStepInterface.new(queue)
+    end
+
+    loop do
+      if queue.empty?
+        @current_step.continue # Keep the UI updating regardless of actual process.
+      else
+        until queue.empty?
+          msg = queue.pop
+          @current_step.send(msg.shift, *msg)
+        end
+      end
+
+      break unless child.alive?
+      sleep 0.5
+    end
+
+    puts
+    child.join
+
+    @current_step.nil?
+  rescue => e
+    @current_step.failure "Error while performing step: #{str}\n  #{e.class}: #{e.message}"
+    print "\n"
+    raise
+  ensure
+    @current_step = nil
+  end
+
+  # Post a debug message above the current step output, if debugging is enabled.
+  def debug(str)
+    return unless debug?
+
+    @current_step.blank if @current_step
+    print '--> '.yellow
+    puts str
+    @current_step.repaint if @current_step
+  end
+  # Post an informative message above the current step output.
+  def info(str)
+    @current_step.blank if @current_step
+    print '--> '.green
+    puts str
+    @current_step.repaint if @current_step
+  end
+
+  # Post an error message above the current step output.
+  def error(str)
+    @current_step.blank if @current_step
+    print '--> '.red
+    puts str
+    @current_step.repaint if @current_step
+  end
+
+  # Post a single message, without any progress tracking.
+  def msg(str)
+    c = Step.new(str)
+    c.success
     print "\n"
   end
 end
