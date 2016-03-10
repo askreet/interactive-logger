@@ -2,6 +2,7 @@
 require 'colorize'
 require 'ruby-duration'
 require 'thread'
+require 'thor'
 
 # A logger that shows activity for each step without spamming to stdout.
 class InteractiveLogger

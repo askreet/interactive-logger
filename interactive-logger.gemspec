@@ -11,4 +11,5 @@ Gem::Specification.new do |s|
 
   s.add_dependency('colorize', '~> 0.7.7')
   s.add_dependency('ruby-duration', '~> 3.2', '>= 3.2.3')
+  s.add_dependency('thor', '~> 0.19.1')
 end
