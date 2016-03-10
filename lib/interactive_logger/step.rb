@@ -12,6 +12,7 @@ class InteractiveLogger
       @start = Time.now
       @show_time = show_time
       @pos = 0
+      @thor_shell = Thor::Base.shell.new
       print_msg(in_progress_prefix << str)
     end
 
@@ -60,9 +61,20 @@ class InteractiveLogger
     end
 
     def print_msg(str)
+      str = terminal_trim(str)
       blank
       @last_print_msg = str
       print str
+    end
+
+    # Trim string to current terminal width and break at newline so it can be
+    # replaced rather than causing the same line to print multiple times.
+    def terminal_trim(str)
+      terminal_width = @thor_shell.terminal_width
+      if str.length > (terminal_width - 18)
+        str = "#{str[0..(terminal_width - 22)]}..."
+      end
+      str.lines.first.chomp
     end
   end
 end
