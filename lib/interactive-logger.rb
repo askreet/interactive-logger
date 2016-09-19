@@ -11,6 +11,7 @@ class InteractiveLogger
   def initialize(debug: false)
     @debug = debug
     @current_step = nil
+    @draw_mutex = Mutex.new
   end
 
   def debug?; @debug == true end
@@ -41,11 +42,16 @@ class InteractiveLogger
 
     loop do
       if queue.empty?
-        @current_step.continue # Keep the UI updating regardless of actual process.
+        @draw_mutex.synchronize do
+          @current_step.continue # Keep the UI updating regardless of actual process.
+        end
       else
         until queue.empty?
           msg = queue.pop
-          @current_step.send(msg.shift, *msg)
+
+          @draw_mutex.synchronize do
+            @current_step.send(msg.shift, *msg)
+          end
         end
       end
 
@@ -69,25 +75,32 @@ class InteractiveLogger
   def debug(str)
     return unless debug?
 
-    @current_step.blank if @current_step
-    print '--> '.yellow
-    puts str
-    @current_step.repaint if @current_step
+    @draw_mutex.synchronize do
+      @current_step.blank if @current_step
+      print '--> '.yellow
+      puts str
+      @current_step.repaint if @current_step
+    end
   end
+
   # Post an informative message above the current step output.
   def info(str)
-    @current_step.blank if @current_step
-    print '--> '.green
-    puts str
-    @current_step.repaint if @current_step
+    @draw_mutex.synchronize do
+      @current_step.blank if @current_step
+      print '--> '.green
+      puts str
+      @current_step.repaint if @current_step
+    end
   end
 
   # Post an error message above the current step output.
   def error(str)
-    @current_step.blank if @current_step
-    print '--> '.red
-    puts str
-    @current_step.repaint if @current_step
+    @draw_mutex.synchronize do
+      @current_step.blank if @current_step
+      print '--> '.red
+      puts str
+      @current_step.repaint if @current_step
+    end
   end
 
   # Post a single message, without any progress tracking.
