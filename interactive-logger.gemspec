@@ -9,6 +9,6 @@ Gem::Specification.new do |s|
   s.files       = Dir['lib/**/*.rb']
   s.homepage    = 'https://github.com/askreet/interactive-logger'
 
-  s.add_dependency('colorize', '~> 0.7.7')
+  s.add_dependency('colorize', '~> 0.7', '>= 0.7.7')
   s.add_dependency('ruby-duration', '~> 3.2', '>= 3.2.3')
 end
